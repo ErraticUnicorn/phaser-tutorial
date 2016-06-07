@@ -1,29 +1,12 @@
-// We create our only state
-var mainState = {
-    // Here we add all the functions we need for our state
-    // For this project we will just have 3
-    preload: function() {
-    // This function will be executed at the beginning
-    // That's where we load the game's assets
-        game.load.image('player', 'assets/player.png');
-        game.load.image('wallV', 'assets/wallVertical.png');
-        game.load.image('wallH', 'assets/wallHorizontal.png');
-        game.load.image('coin', 'assets/coin.png');
-        game.load.image('enemy', 'assets/enemy.png');
-    },
+var playState = {
+    
     create: function() {
-    // This function is called after the 'preload' function
-    // Here we set up the game, display sprites, etc.
         this.player = game.add.sprite(game.width/2, game.height/2, 'player')
-        this.player.anchor.setTo(0.5, 0.5);
-        // Tell Phaser that the player will use the Arcade physics engine
-        game.physics.arcade.enable(this.player);
+        this.player.anchor.setTo(0.5, 0.5);;
         // Add vertical gravity to the player
+        game.physics.arcade.enable(this.player);
         this.player.body.gravity.y = 500;
         this.cursor = game.input.keyboard.createCursorKeys();
-        game.stage.backgroundColor = '#3498db';
-        game.physics.startSystem(Phaser.Physics.ARCADE);
-        game.renderer.renderSession.roundPixels = true;
         // Display the coin
         this.coin = game.add.sprite(60, 140, 'coin');
         // Add Arcade physics to the coin
@@ -34,7 +17,7 @@ var mainState = {
         this.scoreLabel = game.add.text(30, 30, 'score: 0',
         { font: '18px Arial', fill: '#ffffff' });
         // Initialize the score variable
-        this.score = 0;
+        game.global.score = 0;
         
         this.enemies = game.add.group();
         this.enemies.enableBody = true;
@@ -95,14 +78,14 @@ var mainState = {
     },
     
     playerDie: function() {
-        game.state.start('main');
+        game.state.start('menu');
     },
     
     takeCoin: function(player, coin) {
         // Increase the score by 5
-        this.score += 5;
+        game.global.score += 5;
         // Update the score label by using its 'text' property
-        this.scoreLabel.text = 'score: ' + this.score;
+        this.scoreLabel.text = 'score: ' + game.global.score;
         // Change the coin position
         this.updateCoinPosition();
     },
@@ -144,8 +127,3 @@ var mainState = {
         enemy.outOfBoundsKill = true;
     },
 };
-// We initialize Phaser
-var game = new Phaser.Game(500, 340, Phaser.AUTO, 'gameDiv');
-// And we tell Phaser to add and start our 'main' state
-game.state.add('main', mainState);
-game.state.start('main');
