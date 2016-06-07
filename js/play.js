@@ -1,11 +1,23 @@
 var playState = {
     
     create: function() {
+        
+        this.jumpSound = game.add.audio('jump');
+        this.coinSound = game.add.audio('coin');
+        this.deadSound = game.add.audio('dead');
         this.player = game.add.sprite(game.width/2, game.height/2, 'player')
+        
+        this.player.animations.add('right', [1, 2], 8, true);
+        this.player.animations.add('left', [3, 4], 8, true);
         this.player.anchor.setTo(0.5, 0.5);;
         // Add vertical gravity to the player
         game.physics.arcade.enable(this.player);
         this.player.body.gravity.y = 500;
+        this.wasd = {
+            up: game.input.keyboard.addKey(Phaser.Keyboard.W),
+            left: game.input.keyboard.addKey(Phaser.Keyboard.A),
+            right: game.input.keyboard.addKey(Phaser.Keyboard.D)
+        };
         this.cursor = game.input.keyboard.createCursorKeys();
         // Display the coin
         this.coin = game.add.sprite(60, 140, 'coin');
@@ -15,17 +27,41 @@ var playState = {
         this.coin.anchor.setTo(0.5, 0.5);
         // Display the score
         this.scoreLabel = game.add.text(30, 30, 'score: 0',
-        { font: '18px Arial', fill: '#ffffff' });
+        { font: '18px Geo', fill: '#ffffff' });
         // Initialize the score variable
         game.global.score = 0;
         
         this.enemies = game.add.group();
         this.enemies.enableBody = true;
         this.enemies.createMultiple(10, 'enemy');
-        game.time.events.loop(2200, this.addEnemy, this);
+        this.nextEnemy = 0;
+        
+        this.emitter = game.add.emitter(0, 0, 15);
+        this.emitter.makeParticles('pixel');
+        this.emitter.setYSpeed(-150, 150);
+        this.emitter.setXSpeed(-150, 150);
+        this.emitter.setScale(2, 0, 2, 0, 800);
+        this.emitter.gravity = 0;
+        
+        if (!game.device.desktop) {
+            this.addMobileInputs();
+        }
+        
+        game.input.keyboard.addKeyCapture(
+            [Phaser.Keyboard.UP, Phaser.Keyboard.DOWN,
+            Phaser.Keyboard.LEFT, Phaser.Keyboard.RIGHT]);
+        
+        if (!game.device.dekstop) {
+            game.scale.onOrientationChange.add(this.orientationChange, this);
+            this.rotateLabel = game.add.text(game.width/2, game.height/2, '',
+            { font: '30px Arial', fill: '#fff', backgroundColor: '#000' });
+            this.rotateLabel.anchor.setTo(0.5, 0.5);
+            this.orientationChange();
+        }
         
         this.createWorld();
     },
+    
     update: function() {
     // This function is called 60 times per second
     // It contains the game's logic
@@ -41,6 +77,18 @@ var playState = {
         // Call the 'playerDie' function when the player and an enemy overlap
         game.physics.arcade.overlap(this.player, this.enemies, this.playerDie,
         null, this);
+        
+        if (this.nextEnemy < game.time.now) {
+            var start = 4000, end = 1000, score = 100;
+            var delay = Math.max(
+            start - (start - end) * game.global.score / score, end);
+            this.addEnemy();
+            this.nextEnemy = game.time.now + delay;
+        }
+        
+        if (!this.player.alive) {
+            return;
+        }
     },
     
     createWorld: function() {
@@ -63,30 +111,106 @@ var playState = {
     },
     
     movePlayer: function() {
-        if (this.cursor.left.isDown) {
+        
+        if (game.input.totalActivePointers == 0) {
+            this.moveLeft = false;
+            this.moveRight = false;
+        }
+        
+        if (this.cursor.left.isDown || this.wasd.left.isDown || this.moveLeft) {
             this.player.body.velocity.x = -200;
+            this.player.animations.play('left');
         }
-        else if (this.cursor.right.isDown) {
+        
+        else if (this.cursor.right.isDown || this.wasd.right.isDown || this.moveRight) { 
             this.player.body.velocity.x = 200;
+            this.player.animations.play('right');
         }
+       
         else {
             this.player.body.velocity.x = 0;
         }
-        if (this.cursor.up.isDown && this.player.body.touching.down) {
-           this.player.body.velocity.y = -320;
+        
+        if (this.cursor.up.isDown || this.wasd.up.isDown && this.player.body.touching.down) {
+            this.jumpPlayer();
         }
     },
     
+    addMobileInputs: function() {
+        // Add the jump button
+        var jumpButton = game.add.sprite(350, 240, 'jumpButton');
+        jumpButton.inputEnabled = true;
+        jumpButton.alpha = 0.5;
+        jumpButton.events.onInputDown.add(this.jumpPlayer, this);
+        
+        // Movement variables
+        this.moveLeft = false;
+        this.moveRight = false;
+        
+        // Add the move left button
+        var leftButton = game.add.sprite(50, 240, 'leftButton');
+        leftButton.inputEnabled = true;
+        leftButton.alpha = 0.5;
+        leftButton.events.onInputOver.add(this.setLeftTrue, this);
+        leftButton.events.onInputOut.add(this.setLeftFalse, this);
+        leftButton.events.onInputDown.add(this.setLeftTrue, this);
+        leftButton.events.onInputUp.add(this.setLeftFalse, this);
+        
+        // Add the move right button
+        var rightButton = game.add.sprite(130, 240, 'rightButton');
+        rightButton.inputEnabled = true;
+        rightButton.alpha = 0.5;
+        rightButton.events.onInputOver.add(this.setRightTrue, this);
+        rightButton.events.onInputOut.add(this.setRightFalse, this);
+        rightButton.events.onInputDown.add(this.setRightTrue, this);
+        rightButton.events.onInputUp.add(this.setRightFalse, this);
+    },
+    
+    setLeftTrue: function() {
+        this.moveLeft = true;
+    },
+    setLeftFalse: function() {
+        this.moveLeft = false;
+    },
+    setRightTrue: function() {
+        this.moveRight = true;
+    },
+    setRightFalse: function() {
+        this.moveRight = false;
+    },
+    
+    jumpPlayer: function() {
+        if (this.player.body.touching.down) {
+            this.player.body.velocity.y = -320;
+            this.jumpSound.play();
+        }
+    },
+    
+    
     playerDie: function() {
+        this.player.kill();
+        
+        this.emitter.x = this.player.x;
+        this.emitter.y = this.player.y;
+        this.emitter.start(true, 800, null, 15);
+        
+        this.deadSound.play();
+        game.camera.shake(0.02, 300);
+        
+        game.time.events.add(1000, this.startMenu, this);
+    },
+    
+    startMenu: function() {
         game.state.start('menu');
     },
     
     takeCoin: function(player, coin) {
-        // Increase the score by 5
+        this.coin.scale.setTo(0, 0);
+        game.add.tween(this.coin.scale).to({x: 1, y: 1}, 300).start();
+        game.add.tween(this.player.scale).to({x: 1.3, y: 1.3}, 100).yoyo(true).start();
+        this.coinSound.play();
         game.global.score += 5;
-        // Update the score label by using its 'text' property
         this.scoreLabel.text = 'score: ' + game.global.score;
-        // Change the coin position
         this.updateCoinPosition();
     },
     
@@ -125,5 +249,16 @@ var playState = {
         enemy.body.bounce.x = 1;
         enemy.checkWorldBounds = true;
         enemy.outOfBoundsKill = true;
+    },
+    
+    orientationChange: function() {
+        if (game.scale.isPortrait) {
+            game.paused = true;
+            this.rotateLabel.text = 'rotate your device in landscape';
+        }
+        else {
+            game.paused = false;
+            this.rotateLabel.text = '';
+        }
     },
 };
